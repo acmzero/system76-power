@@ -57,6 +57,10 @@ impl Power for PowerClient {
         self.set_profile("Battery")
     }
 
+    fn noturbo(&mut self) -> Result<(), String> {
+        self.set_profile("noturbo")
+    }
+
     fn get_external_displays_require_dgpu(&mut self) -> Result<bool, String> {
         let r = self.call_method::<bool>("GetExternalDisplaysRequireDGPU", None)?;
         r.get1().ok_or_else(|| "return value not found".to_string())
@@ -166,6 +170,7 @@ pub fn client(subcommand: &str, matches: &ArgMatches) -> Result<(), String> {
             Some("balanced") => client.balanced(),
             Some("battery") => client.battery(),
             Some("performance") => client.performance(),
+            Some("noturbo") => client.noturbo(),
             _ => profile(&mut client).map_err(err_str),
         },
         "graphics" => match matches.subcommand() {

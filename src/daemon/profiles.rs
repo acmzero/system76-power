@@ -28,7 +28,7 @@ macro_rules! catch {
     };
 }
 
-/// Sets parameters for the balanced profile.
+/// Sets parameters for the _false profile.
 pub fn balanced(errors: &mut Vec<ProfileError>, set_brightness: bool) {
     // The dirty kernel parameter controls how often the OS will sync data to disks. The less
     // frequently this occurs, the more power can be saved, yet the higher the risk of sudden
@@ -66,10 +66,51 @@ pub fn balanced(errors: &mut Vec<ProfileError>, set_brightness: bool) {
     catch!(errors, pstate_values(0, 100, false));
 
     if let Some(model_profiles) = ModelProfiles::new() {
-        catch!(errors, model_profiles.balanced.set());
+        catch!(errors, model_profiles._false.set());
     }
 }
 
+/// Sets parameters for the _false-no-turbo profile.
+pub fn noturbo(errors: &mut Vec<ProfileError>, set_brightness: bool) {
+    // The dirty kernel parameter controls how often the OS will sync data to disks. The less
+    // frequently this occurs, the more power can be saved, yet the higher the risk of sudden
+    // power loss causing loss of data. 15s is a resonable number.
+    Dirty::default().set_max_lost_work(15);
+
+    // Enables the laptop mode feature in the kernel, which allows mechanical drives to spin down
+    // when inactive.
+    LaptopMode::default().set(b"2");
+
+    // Sets radeon power profiles for AMD graphics.
+    RadeonDevice::get_devices().for_each(|dev| dev.set_profiles("auto", "performance", "auto"));
+
+    // Controls disk APM levels and autosuspend delays.
+    catch!(errors, set_disk_power(127, 60000));
+
+    // Enables SCSI / SATA link time power management.
+    catch!(errors, scsi_host_link_time_pm_policy(&["med_power_with_dipm", "medium_power"]));
+
+    if set_brightness {
+        // Manage screen backlights.
+        catch!(errors, iterate_backlights(Backlight::iter(), &Brightness::set_if_lower_than, 40));
+
+        // Manage keyboard backlights.
+        catch!(errors, iterate_backlights(Leds::iter_keyboards(), &Brightness::set_if_lower_than, 50));
+    }
+
+    // Parameters which may cause on certain systems.
+    if pci_runtime_pm_support() {
+        // Enables PCI device runtime power management.
+        catch!(errors, pci_device_runtime_pm(RuntimePowerManagement::On));
+    }
+
+    // Control Intel PState values, if they exist.
+    catch!(errors, pstate_values(0, 90, true));
+
+    if let Some(model_profiles) = ModelProfiles::new() {
+        catch!(errors, model_profiles._false.set());
+    }
+}
 /// Sets parameters for the performance profile
 pub fn performance(errors: &mut Vec<ProfileError>, _set_brightness: bool) {
     Dirty::default().set_max_lost_work(15);
@@ -251,9 +292,10 @@ impl ModelProfile {
 }
 
 pub struct ModelProfiles {
-    pub balanced: ModelProfile,
+    pub _false: ModelProfile,
     pub performance: ModelProfile,
     pub battery: ModelProfile,
+    pub noturbo: ModelProfile,
 }
 
 impl ModelProfiles {
@@ -262,7 +304,7 @@ impl ModelProfiles {
             .unwrap_or(String::new());
         match model_line.trim() {
             "galp5" => Some(ModelProfiles {
-                balanced: ModelProfile {
+                _false: ModelProfile {
                     pl1: Some(28),
                     pl2: None, // galp5 doesn't like setting pl2
                     tcc_offset: Some(12), // 88 C
@@ -276,10 +318,15 @@ impl ModelProfiles {
                     pl1: Some(12),
                     pl2: None, // galp5 doesn't like setting pl2
                     tcc_offset: Some(32), // 68 C
+                },
+                noturbo: ModelProfile {
+                    pl1: Some(28),
+                    pl2: None, // galp5 doesn't like setting pl2
+                    tcc_offset: Some(12), // 88 C
                 }
             }),
             "lemp9" => Some(ModelProfiles {
-                balanced: ModelProfile {
+                _false: ModelProfile {
                     pl1: Some(20),
                     pl2: Some(40), // Upped from 30
                     tcc_offset: Some(12), // 88 C
@@ -293,6 +340,11 @@ impl ModelProfiles {
                     pl1: Some(10),
                     pl2: Some(30),
                     tcc_offset: Some(32), // 68 C
+                },
+                noturbo: ModelProfile {
+                    pl1: Some(20),
+                    pl2: Some(40), // Upped from 30
+                    tcc_offset: Some(12), // 88 C
                 }
             }),
             _ => None,

@@ -149,6 +149,10 @@ impl Power for PowerDaemon {
         self.apply_profile(performance, "Performance").map_err(err_str)
     }
 
+    fn noturbo(&mut self) -> Result<(), String>{
+        self.apply_profile(noturbo, "noturbo").map_err(err_str)
+    }
+
     fn get_external_displays_require_dgpu(&mut self) -> Result<bool, String> {
         self.graphics.get_external_displays_require_dgpu().map_err(err_str)
     }
@@ -251,6 +255,7 @@ pub async fn daemon() -> Result<(), String> {
         sync_action_method(b, "Performance", PowerDaemon::performance);
         sync_action_method(b, "Balanced", PowerDaemon::balanced);
         sync_action_method(b, "Battery", PowerDaemon::battery);
+        sync_action_method(b, "noturbo", PowerDaemon::noturbo);
         sync_get_method(b, "GetExternalDisplaysRequireDGPU", "required", PowerDaemon::get_external_displays_require_dgpu);
         sync_get_method(b, "GetDefaultGraphics", "vendor", PowerDaemon::get_default_graphics);
         sync_get_method(b, "GetGraphics", "vendor", PowerDaemon::get_graphics);
